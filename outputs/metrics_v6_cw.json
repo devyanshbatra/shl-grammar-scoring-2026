@@ -1,0 +1,41 @@
+{
+  "cv": {
+    "ridge_feat": {
+      "rmse": 0.6330912699134114,
+      "pearson": 0.7810166461717587
+    },
+    "ridge_emb": {
+      "rmse": 0.6346408386783101,
+      "pearson": 0.7813781712244678
+    },
+    "svr_feat": {
+      "rmse": 0.6413825414410265,
+      "pearson": 0.7754900428298018
+    },
+    "lgbm_feat": {
+      "rmse": 0.6302761377407464,
+      "pearson": 0.7837549251713493
+    },
+    "blend": {
+      "rmse": 0.5980620866751643,
+      "pearson": 0.8094731503352011
+    }
+  },
+  "train_fit": {
+    "rmse": 0.3443773511004627,
+    "pearson": 0.9492776321946583
+  },
+  "weights": {
+    "ridge_feat": 0.036000939298565515,
+    "ridge_emb": 0.43353956118981507,
+    "svr_feat": 0.23517427558497542,
+    "lgbm_feat": 0.2952852239266441
+  },
+  "args": {
+    "emb": "whisper_mpnet",
+    "no_crisper": false,
+    "tag": "v6_cw",
+    "audio_layer": null,
+    "scan_audio": false
+  }
+}

@@ -1,4 +1,4 @@
-"""Acoustic embeddings straight from the waveform (no ASR involved).
+﻿"""Acoustic embeddings straight from the waveform (no ASR involved).
 
 WavLM-base-plus is a self-supervised speech model; its hidden states encode
 pronunciation, prosody and fluency, which human raters hear but transcripts lose.
@@ -22,8 +22,9 @@ sys.path.insert(0, str(Path(__file__).parent))
 from transcribe import DATA, clip_list  # noqa: E402
 
 OUT = Path("outputs")
-MODEL = "microsoft/wavlm-base-plus"
-MAX_SECONDS = 30  # CPU budget: ~6 s/clip on 8 threads while CrisperWhisper uses the GPU
+MODEL = os.environ.get("EMB_MODEL", "microsoft/wavlm-base-plus")
+MAX_SECONDS = int(os.environ.get("EMB_SECONDS", "30"))  # CPU budget; 60 on GPU
+NAME = os.environ.get("EMB_NAME", "wavlm")
 # Leave CPU cores for the CrisperWhisper job running on the GPU.
 torch.set_num_threads(int(os.environ.get("EMB_THREADS", "4")))
 
@@ -56,10 +57,11 @@ def main():
             if (i + 1) % 50 == 0:
                 print(f"{i + 1}/{len(clips)}", flush=True)
 
-    np.save(OUT / "wavlm_layers.npy", out)
-    pd.Series([f"{s}/{f}" for s, f in clips]).to_csv(OUT / "wavlm_index.csv", index=False)
+    np.save(OUT / f"{NAME}_layers.npy", out)
+    pd.Series([f"{s}/{f}" for s, f in clips]).to_csv(OUT / f"{NAME}_index.csv", index=False)
     print("saved", out.shape)
 
 
 if __name__ == "__main__":
     main()
+

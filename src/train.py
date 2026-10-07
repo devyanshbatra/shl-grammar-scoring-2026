@@ -1,4 +1,4 @@
-"""Train grammar-score regressors with repeated K-fold CV and write a submission.
+﻿"""Train grammar-score regressors with repeated K-fold CV and write a submission.
 
 Models (all scored on out-of-fold predictions, i.e. each clip predicted by a
 model that never saw it):
@@ -67,11 +67,12 @@ def load(use_crisper, emb_name):
     return Xtr, Xte, Etr, Ete, train.label.values, test.index
 
 
-def load_audio(layer, train_ids, test_ids):
-    """Mean-pooled WavLM hidden layer (src/audio_embed.py) for train and test clips."""
-    idx = pd.read_csv(OUT / "wavlm_index.csv").iloc[:, 0].values
-    A = pd.DataFrame(np.load(OUT / "wavlm_layers.npy")[:, layer, :], index=idx)
-    A.columns = [f"a{i}" for i in A.columns]
+def load_audio(layer, train_ids, test_ids, src="wavlm"):
+    """Mean-pooled hidden layer of an audio encoder for train and test clips.
+    src: 'wavlm' (src/audio_embed.py) or 'whisperenc' (src/whisper_embed.py)."""
+    idx = pd.read_csv(OUT / f"{src}_index.csv").iloc[:, 0].values
+    A = pd.DataFrame(np.load(OUT / f"{src}_layers.npy", mmap_mode="r")[:, layer, :], index=idx)
+    A.columns = [f"{src}_{i}" for i in A.columns]  # distinct names when combined
     return (A.loc["train/" + train_ids].set_axis(train_ids),
             A.loc["test/" + test_ids].set_axis(test_ids))
 
@@ -81,20 +82,25 @@ def linear():
                          RidgeCV(alphas=np.logspace(-2, 5, 29)))
 
 
-def scan_audio_layers(y, train_ids, test_ids):
-    """Which WavLM layer predicts the score best on its own (Ridge, 5-fold CV)."""
+def scan_audio_layers(y, train_ids, test_ids, src="wavlm"):
+    """Which encoder layer predicts the score best on its own (Ridge, 5-fold CV)."""
     from sklearn.model_selection import StratifiedKFold, cross_val_predict
     folds = list(StratifiedKFold(N_SPLITS, shuffle=True, random_state=0)
                  .split(np.zeros(len(y)), np.round(y).astype(int)))
-    n_layers = np.load(OUT / "wavlm_layers.npy", mmap_mode="r").shape[1]
+    n_layers = np.load(OUT / f"{src}_layers.npy", mmap_mode="r").shape[1]
     for layer in range(n_layers):
-        A, _ = load_audio(layer, train_ids, test_ids)
+        A, _ = load_audio(layer, train_ids, test_ids, src)
         p = cross_val_predict(linear(), A, y, cv=folds)
         print(f"  layer {layer:2d}  RMSE {rmse(y, np.clip(p, LO, HI)):.4f}  "
               f"Pearson {pearsonr(y, p)[0]:.4f}")
 
 
-def make_models(with_audio=False):
+def select(models, names):
+    """Keep only the named models (comma-separated), e.g. to reproduce an older version."""
+    return models if not names else {k: v for k, v in models.items() if k in names.split(",")}
+
+
+def make_models(with_audio=False, with_wenc=False):
     svr = lambda: make_pipeline(SimpleImputer(strategy="median"), StandardScaler(),
                                 SVR(C=3.0, epsilon=0.1, gamma="scale"))
     gbm = lambda: lgb.LGBMRegressor(n_estimators=600, learning_rate=0.02, num_leaves=15,
@@ -105,6 +111,11 @@ def make_models(with_audio=False):
     if with_audio:
         models["ridge_audio"] = ("feat_audio", linear)  # features + WavLM embedding
         models["svr_audio"] = ("audio", svr)            # WavLM embedding alone, non-linear
+    if with_wenc:
+        models["ridge_wenc"] = ("feat_wenc", linear)    # features + Whisper-encoder embedding
+        models["svr_wenc"] = ("wenc", svr)              # Whisper-encoder embedding alone
+    if with_audio and with_wenc:
+        models["ridge_both"] = ("feat_both", linear)    # features + both audio embeddings
     return models
 
 
@@ -112,20 +123,28 @@ def main(args):
     Xtr, Xte, Etr, Ete, y, test_ids = load(not args.no_crisper, args.emb)
     print(f"train {Xtr.shape}  test {Xte.shape}  emb {Etr.shape[1]}d")
     if args.scan_audio:
-        return scan_audio_layers(y, Xtr.index, test_ids)
+        return scan_audio_layers(y, Xtr.index, test_ids, args.scan_src)
     inputs = {"feat": (Xtr, Xte),
               "both": (pd.concat([Xtr, Etr], axis=1), pd.concat([Xte, Ete], axis=1))}
     with_audio = args.audio_layer is not None
     if with_audio:
-        Atr, Ate = load_audio(args.audio_layer, Xtr.index, test_ids)
+        Atr, Ate = load_audio(args.audio_layer, Xtr.index, test_ids, args.audio_src)
         inputs["feat_audio"] = (pd.concat([Xtr, Atr], axis=1), pd.concat([Xte, Ate], axis=1))
         inputs["audio"] = (Atr, Ate)
+    with_wenc = args.whisper_layer is not None
+    if with_wenc:
+        Wtr, Wte = load_audio(args.whisper_layer, Xtr.index, test_ids, "whisperenc")
+        inputs["feat_wenc"] = (pd.concat([Xtr, Wtr], axis=1), pd.concat([Xte, Wte], axis=1))
+        inputs["wenc"] = (Wtr, Wte)
+        if with_audio:
+            inputs["feat_both"] = (pd.concat([Xtr, Atr, Wtr], axis=1),
+                                   pd.concat([Xte, Ate, Wte], axis=1))
 
     # Stratify folds on rounded score so each fold sees the full label range.
     strata = np.round(y).astype(int)
     cv = RepeatedStratifiedKFold(n_splits=N_SPLITS, n_repeats=N_REPEATS, random_state=42)
     oof, test_pred = {}, {}
-    for name, (inp, factory) in make_models(with_audio).items():
+    for name, (inp, factory) in select(make_models(with_audio, with_wenc), args.models).items():
         Xa, Xb = inputs[inp]
         o = np.zeros((N_REPEATS, len(y)))
         t = np.zeros(len(Xb))
@@ -152,7 +171,7 @@ def main(args):
     # so it is reported next to the out-of-fold numbers above, never instead.
     print("\nTraining-data fit (same clips used for fitting -> optimistic):")
     train_fit, importances = {}, None
-    for name, (inp, factory) in make_models(with_audio).items():
+    for name, (inp, factory) in select(make_models(with_audio, with_wenc), args.models).items():
         Xa, _ = inputs[inp]
         m = factory().fit(Xa, y)
         train_fit[name] = m.predict(Xa)
@@ -185,5 +204,12 @@ if __name__ == "__main__":
     ap.add_argument("--audio-layer", type=int, default=None,
                     help="add a Ridge on features + this WavLM layer (src/audio_embed.py)")
     ap.add_argument("--scan-audio", action="store_true",
-                    help="only report CV of each WavLM layer on its own")
+                    help="only report CV of each encoder layer on its own")
+    ap.add_argument("--scan-src", default="wavlm",
+                    help="embedding name: wavlm, wavlm60, wavlmL, whisperenc")
+    ap.add_argument("--audio-src", default="wavlm", help="embedding used by the *_audio models")
+    ap.add_argument("--models", default="", help="comma-separated subset of models to blend")
+    ap.add_argument("--whisper-layer", type=int, default=None,
+                    help="add models on this Whisper-encoder layer (src/whisper_embed.py)")
     main(ap.parse_args())
+
