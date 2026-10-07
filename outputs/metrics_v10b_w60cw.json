@@ -1,0 +1,55 @@
+{
+  "cv": {
+    "ridge_feat": {
+      "rmse": 0.6330912699134114,
+      "pearson": 0.7810166461717587
+    },
+    "ridge_emb": {
+      "rmse": 0.6346408386783101,
+      "pearson": 0.7813781712244678
+    },
+    "svr_feat": {
+      "rmse": 0.6413825414410265,
+      "pearson": 0.7754900428298018
+    },
+    "lgbm_feat": {
+      "rmse": 0.6302761377407464,
+      "pearson": 0.7837549251713493
+    },
+    "ridge_audio": {
+      "rmse": 0.5280244791659492,
+      "pearson": 0.8542388534497116
+    },
+    "svr_audio": {
+      "rmse": 0.547052481874151,
+      "pearson": 0.8440705977052212
+    },
+    "blend": {
+      "rmse": 0.5094087186256263,
+      "pearson": 0.8703053786643511
+    }
+  },
+  "train_fit": {
+    "rmse": 0.22873753957639154,
+    "pearson": 0.979115000651146
+  },
+  "weights": {
+    "ridge_feat": 0.0,
+    "ridge_emb": 0.05134963904465087,
+    "svr_feat": 0.07953480954862159,
+    "lgbm_feat": 0.09073816622479047,
+    "ridge_audio": 0.3606525276014481,
+    "svr_audio": 0.41772485758048894
+  },
+  "args": {
+    "emb": "whisper_mpnet",
+    "no_crisper": false,
+    "tag": "v10b_w60cw",
+    "audio_layer": 7,
+    "scan_audio": false,
+    "scan_src": "wavlm",
+    "audio_src": "wavlm60",
+    "models": "",
+    "whisper_layer": null
+  }
+}

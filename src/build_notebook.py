@@ -25,6 +25,10 @@ md(f"""# Grammar Scoring Engine for Spoken English — SHL Hiring Assessment 202
                                                                                                                        │
 ```
 
+**Submitted model (v5, reproduced in this notebook):** Whisper text features + Claude rubric judge + WavLM audio,
+blended Ridge/SVR/LightGBM. CrisperWhisper text and the Whisper-encoder embedding belong to v6/v7 (see §7–8);
+v7 is the second final pick.
+
 **Biggest single gain: the audio embedding.** Error analysis of the text-only model showed it could not separate the
 extremes (true 2.0 predicted ≈ 2.7, true 5.0 ≈ 4.4). Raters *listen*; a self-supervised speech encoder (WavLM) gives the
 model that acoustic impression and cut public RMSE from 0.403 to 0.338.
@@ -132,7 +136,11 @@ code("""# Re-run training with exactly the settings stored for this model versio
 import subprocess
 a = json.load(open(OUT/f'metrics_{TAG}.json'))['args']
 args = ['--emb', a['emb'], '--tag', TAG] + (['--no-crisper'] if a['no_crisper'] else []) \\
-       + (['--audio-layer', str(a['audio_layer'])] if a.get('audio_layer') is not None else [])
+       + (['--audio-layer', str(a['audio_layer']), '--audio-src', a.get('audio_src', 'wavlm')]
+          if a.get('audio_layer') is not None else []) \\
+       + (['--whisper-layer', str(a['whisper_layer'])] if a.get('whisper_layer') is not None else []) \\
+       + (['--models', a['models']] if a.get('models') else []) \\
+       + (['--group-cv'] if a.get('group_cv') else [])
 print('python src/train.py', ' '.join(args))
 print(subprocess.run([sys.executable, 'src/train.py', *args], capture_output=True, text=True).stdout)"""),
 code("""m = json.load(open(OUT/f'metrics_{TAG}.json'))
@@ -165,13 +173,49 @@ md("""**Reading the plots.** Predictions are compressed toward the mean (≈3.5)
 typical for regression on noisy averaged ratings with ~700 samples. Errors are largest for clips where ASR itself struggles
 (heavy accent / noisy audio), because then transcript-derived grammar evidence is unreliable."""),
 
-md("## 7. Submission"),
+md("""## 7. Experiment log — everything tried, and why it was kept or dropped
+
+Scores: **CV** = repeated stratified 5-fold OOF RMSE; **grouped CV** = same but folds grouped by speaker
+(see §8); **public** = Kaggle public leaderboard RMSE. Lower is better everywhere.
+
+| Ver. | Change | CV | Grouped CV | Public | Outcome |
+|---|---|---|---|---|---|
+| v1 | Whisper text features + mpnet embedding; Ridge/LightGBM blend | 0.647 | – | 0.4963 | baseline |
+| v2 | + Claude rubric judge (zero-shot), + SVR | 0.6025 | – | 0.4079 | **kept** — biggest text gain |
+| v3 | + second Claude run averaged, + RoBERTa-CoLA | 0.6055 | – | – | neutral → not submitted |
+| v4 | + few-shot Claude (11 rater-scored anchors, blanked) | 0.6022 | 0.607 | 0.4033 | **kept** — better calibrated judge |
+| **v5** | + **WavLM-base-plus audio** (first 30 s, layer 11) | 0.542 | 0.558 | **0.3376** | **final pick #1** — best public |
+| v5b | + RBF-SVR on the audio embedding | 0.536 | – | 0.3501 | better CV, worse public |
+| v6 | + CrisperWhisper verbatim features, Claude on verbatim (r 0.717 → 0.738) | 0.530 | 0.551 | 0.3476 | better CV, public within noise |
+| **v7** | + Whisper-turbo encoder embedding (layer 27) | **0.504** | **0.523** | 0.3730 | **final pick #2** — best on both validations |
+| v8 | + Ridge on features + both audio embeddings | 0.503 | – | 0.3730 | no gain over v7 |
+| v9 | 50/50 average of v5 and v7 predictions | – | – | 0.3473 | between the two |
+| v10a | v5 recipe, WavLM-base on full 60 s (layer 7) | 0.527 | 0.553 | 0.3521 | better CV, worse public |
+| v10b | v6 + WavLM 60 s | 0.509 | – | 0.3659 | better CV, worse public |
+| v11 | v5 recipe, **WavLM-large** (layer 21, 60 s) | 0.516 | 0.541 | 0.3671 | better CV, worse public |
+
+Also tried and dropped: bge-large / Qwen3 text embeddings (redundant once the Claude judge was in, and CPU-bound);
+per-split mean normalisation of audio embeddings (worse on a test-like holdout); a probe submission predicting the
+train mean (public 1.023) to confirm the test score spread.
+
+## 8. CV vs public leaderboard — what was investigated
+
+From v5 on, every model with better CV scored *worse* on the public leaderboard. Three checks:
+1. **Adversarial validation** — a classifier separates train from test clips (AUC 0.71 text features → 0.83 Whisper-encoder audio): the test set is distributed differently.
+2. **Speaker overlap** — nearest-voice cosine similarity (WavLM layer 2): train→other train median **0.87** (265/732 clips > 0.9), test→train median **0.62** (1/216 > 0.9). The train set repeats speakers; the test set has new ones, so random CV over-credits models that recognise voices.
+3. **Speaker-grouped CV** (`src/speakers.py`, 489 voice groups, a voice never in both fit and validation): audio models lose 0.015–0.025, text-only v4 only 0.005 — leakage confirmed — **but the ranking holds** (v7 0.523 < v11 0.541 < v6 0.551 < v5 0.558).
+
+Conclusion: the remaining public-board differences (0.338–0.373) are within the noise of a small public subset
+(~±0.02–0.03 RMSE). Final picks hedge both views: **v5** (best public) and **v7** (best on random and speaker-grouped CV).
+This notebook reproduces **v5**, the submitted output file."""),
+
+md("## 9. Submission"),
 code("""sub = pd.read_csv(OUT/f'submission_{TAG}.csv')
 assert len(sub) == 216 and set(sub.filename) == set(test.filename)
 sub.to_csv('submission.csv', index=False)
 print(sub.label.describe()); sub.head()"""),
 
-md("""## 8. Summary & limitations
+md("""## 10. Summary & limitations
 
 * **Key insights:** (1) the 0.0 labels are an unscored batch absent from test — removing them matters more than any model tweak;
   (2) standard ASR hides grammar errors, so a verbatim ASR is used alongside it.

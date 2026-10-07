@@ -23,7 +23,7 @@ from scipy.optimize import nnls
 from scipy.stats import pearsonr
 from sklearn.impute import SimpleImputer
 from sklearn.linear_model import RidgeCV
-from sklearn.model_selection import RepeatedStratifiedKFold
+from sklearn.model_selection import RepeatedStratifiedKFold, StratifiedGroupKFold
 from sklearn.pipeline import make_pipeline
 from sklearn.preprocessing import StandardScaler
 from sklearn.svm import SVR
@@ -142,13 +142,22 @@ def main(args):
 
     # Stratify folds on rounded score so each fold sees the full label range.
     strata = np.round(y).astype(int)
-    cv = RepeatedStratifiedKFold(n_splits=N_SPLITS, n_repeats=N_REPEATS, random_state=42)
+    if args.group_cv:
+        # Speaker-grouped folds (src/speakers.py): a voice never appears in both the
+        # fitting and the validation part, mirroring the test set's unseen speakers.
+        g = pd.read_csv(OUT / "speaker_groups.csv").set_index("key").group
+        groups = g.loc["train/" + Xtr.index].values
+        splits = [s for r in range(N_REPEATS) for s in StratifiedGroupKFold(
+            N_SPLITS, shuffle=True, random_state=42 + r).split(Xtr, strata, groups)]
+    else:
+        splits = list(RepeatedStratifiedKFold(n_splits=N_SPLITS, n_repeats=N_REPEATS,
+                                              random_state=42).split(Xtr, strata))
     oof, test_pred = {}, {}
     for name, (inp, factory) in select(make_models(with_audio, with_wenc), args.models).items():
         Xa, Xb = inputs[inp]
         o = np.zeros((N_REPEATS, len(y)))
         t = np.zeros(len(Xb))
-        for k, (tr, va) in enumerate(cv.split(Xa, strata)):
+        for k, (tr, va) in enumerate(splits):
             m = factory().fit(Xa.iloc[tr], y[tr])
             o[k // N_SPLITS, va] = m.predict(Xa.iloc[va])
             t += m.predict(Xb) / (N_SPLITS * N_REPEATS)
@@ -209,6 +218,8 @@ if __name__ == "__main__":
                     help="embedding name: wavlm, wavlm60, wavlmL, whisperenc")
     ap.add_argument("--audio-src", default="wavlm", help="embedding used by the *_audio models")
     ap.add_argument("--models", default="", help="comma-separated subset of models to blend")
+    ap.add_argument("--group-cv", action="store_true",
+                    help="speaker-grouped folds (outputs/speaker_groups.csv)")
     ap.add_argument("--whisper-layer", type=int, default=None,
                     help="add models on this Whisper-encoder layer (src/whisper_embed.py)")
     main(ap.parse_args())

@@ -27,3 +27,5 @@ outputs/*.out
 outputs/*.err
 outputs/wavlm_*.txt
 outputs/probe_*.csv
+outputs/*.txt
+outputs/lb2/

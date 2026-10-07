@@ -1,0 +1,46 @@
+{
+  "cv": {
+    "ridge_feat": {
+      "rmse": 0.6397454596964683,
+      "pearson": 0.775727633796752
+    },
+    "ridge_emb": {
+      "rmse": 0.6466836060048341,
+      "pearson": 0.7720188335891656
+    },
+    "svr_feat": {
+      "rmse": 0.6554450117263174,
+      "pearson": 0.7649414690111034
+    },
+    "lgbm_feat": {
+      "rmse": 0.6407411924037183,
+      "pearson": 0.7754636321581898
+    },
+    "blend": {
+      "rmse": 0.6071642563261754,
+      "pearson": 0.8031126334343163
+    }
+  },
+  "train_fit": {
+    "rmse": 0.3743581346472891,
+    "pearson": 0.9389147923176958
+  },
+  "weights": {
+    "ridge_feat": 0.09689080278602372,
+    "ridge_emb": 0.4117207784167105,
+    "svr_feat": 0.21662480124385522,
+    "lgbm_feat": 0.27476361755341056
+  },
+  "args": {
+    "emb": "whisper_mpnet",
+    "no_crisper": true,
+    "tag": "g_v4",
+    "audio_layer": null,
+    "scan_audio": false,
+    "scan_src": "wavlm",
+    "audio_src": "wavlm",
+    "models": "",
+    "group_cv": true,
+    "whisper_layer": null
+  }
+}

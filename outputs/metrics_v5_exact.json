@@ -43,7 +43,9 @@
     "audio_layer": 11,
     "scan_audio": false,
     "scan_src": "wavlm",
+    "audio_src": "wavlm",
     "models": "ridge_feat,ridge_emb,svr_feat,lgbm_feat,ridge_audio",
+    "group_cv": false,
     "whisper_layer": null
   }
 }
