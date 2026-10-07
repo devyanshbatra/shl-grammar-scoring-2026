@@ -1,7 +1,7 @@
 # Grammar Scoring Engine for Spoken English — SHL Hiring Assessment 2026
 
 Predict a **1–5 grammar score** (averaged human MOS ratings) from a 45–60 s English speech clip.
-Kaggle: `shl-hiring-assessment-2026` · leaderboard metric: RMSE (lower is better); Pearson also reported.
+Kaggle: `shl-hiring-assessment-2026` · Kaggle username: **devyanshbatra** · leaderboard metric: RMSE (lower is better); Pearson also reported.
 
 **Approach in one line:** *listen → write down what was said → measure grammar and fluency evidence, from both the text and the sound → learn the mapping to the human score.*
 
