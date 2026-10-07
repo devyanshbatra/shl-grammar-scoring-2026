@@ -2,7 +2,8 @@
 
 WavLM-base-plus is a self-supervised speech model; its hidden states encode
 pronunciation, prosody and fluency, which human raters hear but transcripts lose.
-Clips are processed in 15 s windows (full 60 s attention is ~16x costlier on CPU).
+Only the first 30 s of each clip is used, in 15 s windows, to fit a CPU budget
+(the GPU is busy with CrisperWhisper).
 For every clip we mean-pool each of the 13 hidden layers over time and save a
 (clips, 13, 768) array; train.py picks the layer by cross-validation.
 
@@ -22,6 +23,7 @@ from transcribe import DATA, clip_list  # noqa: E402
 
 OUT = Path("outputs")
 MODEL = "microsoft/wavlm-base-plus"
+MAX_SECONDS = 30  # CPU budget: ~6 s/clip on 8 threads while CrisperWhisper uses the GPU
 # Leave CPU cores for the CrisperWhisper job running on the GPU.
 torch.set_num_threads(int(os.environ.get("EMB_THREADS", "4")))
 
@@ -40,6 +42,7 @@ def main():
     with torch.no_grad():
         for i, (split, f) in enumerate(clips):
             wav, sr = sf.read(DATA / split / f, dtype="float32")
+            wav = wav[:MAX_SECONDS * sr]  # first 30 s: enough to hear proficiency, half the CPU time
             pieces = [wav[s:s + chunk] for s in range(0, len(wav), chunk)]
             pieces = [p for p in pieces if len(p) >= sr] or [wav]  # drop <1 s tails
             acc, n_frames = 0, 0

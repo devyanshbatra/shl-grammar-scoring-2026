@@ -7,6 +7,7 @@ model that never saw it):
   svr_feat     RBF-kernel SVR on the hand-crafted features
   lgbm_feat    LightGBM on the hand-crafted features
   ridge_audio  Ridge on features + WavLM acoustic embedding (with --audio-layer)
+  svr_audio    RBF-kernel SVR on the WavLM embedding alone (with --audio-layer)
   blend        non-negative weighted mix of the above, weights fit on OOF preds
 
 Usage:  python src/train.py [--emb whisper_mpnet] [--no-crisper] [--tag NAME]
@@ -103,6 +104,7 @@ def make_models(with_audio=False):
               "svr_feat": ("feat", svr), "lgbm_feat": ("feat", gbm)}
     if with_audio:
         models["ridge_audio"] = ("feat_audio", linear)  # features + WavLM embedding
+        models["svr_audio"] = ("audio", svr)            # WavLM embedding alone, non-linear
     return models
 
 
@@ -117,6 +119,7 @@ def main(args):
     if with_audio:
         Atr, Ate = load_audio(args.audio_layer, Xtr.index, test_ids)
         inputs["feat_audio"] = (pd.concat([Xtr, Atr], axis=1), pd.concat([Xte, Ate], axis=1))
+        inputs["audio"] = (Atr, Ate)
 
     # Stratify folds on rounded score so each fold sees the full label range.
     strata = np.round(y).astype(int)

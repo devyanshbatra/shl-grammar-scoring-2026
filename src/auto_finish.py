@@ -108,13 +108,14 @@ def main():
         cands["v6_cw_audio"] = ["--emb", "whisper_mpnet", "--audio-layer", str(best_layer)]
     for tag, extra in cands.items():
         run([PY, "src/train.py", *extra, "--tag", tag], env_extra=cpu)
-    pool = [t for t in ["v4_fs", "v5_audio", *cands] if (OUT / f"metrics_{t}.json").exists()]
+    pool = [t for t in ["v4_fs", "v5_audio", "v5b_audio", *cands]
+            if (OUT / f"metrics_{t}.json").exists()]
     ranked = sorted(pool, key=cv_rmse)
     log("CV ranking: " + ", ".join(f"{t}={cv_rmse(t):.4f}" for t in ranked))
     best = ranked[0]
 
     # 5. Submit + notebook ---------------------------------------------------
-    if best != "v4_fs":
+    if best not in ("v4_fs", "v5_audio", "v5b_audio"):  # those were submitted already
         kaggle = str(Path(PY).parent / "kaggle.exe")
         run([kaggle, "competitions", "submit", "shl-hiring-assessment-2026",
              "-f", str(OUT / f"submission_{best}.csv"),
