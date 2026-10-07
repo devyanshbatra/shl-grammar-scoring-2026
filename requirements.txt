@@ -1,0 +1,21 @@
+# PyTorch with CUDA 12.4 (GPU used for transcription):
+#   pip install torch torchaudio --index-url https://download.pytorch.org/whl/cu124
+torch==2.6.0
+faster-whisper==1.2.1
+crisperwhisper[convert]==2.0.3
+transformers==5.19.0
+sentence-transformers==6.1.0
+language-tool-python==3.4.0
+soundfile==0.14.0
+librosa==1.0.0
+pandas
+pyarrow
+numpy
+scipy
+scikit-learn==1.9.1
+lightgbm==4.7.0
+matplotlib
+seaborn
+nbformat
+jupyter
+kaggle==2.2.4
